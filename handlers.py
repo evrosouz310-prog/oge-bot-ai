@@ -16,7 +16,7 @@ async def cmd_start(message: types.Message, db):
     await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     await message.answer(
         f"Привет, {message.from_user.first_name}! 👋\n"
-        "Я твой помощник по подготовке к ОГЭ по информатике.\n"
+        "Я твой помощник по подготовке к ОГЭ/ЕГЭ по информатике.\n"
         "Выбери действие на клавиатуре ниже:",
         reply_markup=main_menu()
     )
