@@ -1,16 +1,10 @@
 """
 ai_service.py — обращение к нейросети.
-
-Используется OpenAI-совместимый формат (POST /chat/completions), поэтому один и тот же код
-работает и с Groq, и с OpenRouter — меняются только переменные окружения
-AI_BASE_URL, AI_MODEL и AI_API_KEY.
-
-Надёжность: таймаут, повторные попытки при 429/5xx/сетевых сбоях и
-понятные сообщения об ошибках для пользователя (класс AIError).
 """
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import re
 
@@ -18,7 +12,6 @@ import aiohttp
 
 log = logging.getLogger(__name__)
 
-# Системная инструкция: задаёт «роль» нейросети и формат ответа.
 SYSTEM_PROMPT = (
     "Ты — доброжелательный репетитор по информатике для школьников, "
     "которые готовятся к ОГЭ и ЕГЭ. Отвечай на русском языке, кратко и по шагам "
@@ -31,8 +24,6 @@ SYSTEM_PROMPT = (
 
 
 class AIError(Exception):
-    """Ошибка работы с нейросетью. user_message можно безопасно показать пользователю."""
-
     def __init__(self, user_message: str) -> None:
         super().__init__(user_message)
         self.user_message = user_message
@@ -55,7 +46,6 @@ class AIService:
         self._session: aiohttp.ClientSession | None = None
 
     def _get_session(self) -> aiohttp.ClientSession:
-        """Сессия создаётся лениво (уже внутри работающего event loop)."""
         if self._session is None or self._session.closed:
             self._session = aiohttp.ClientSession(timeout=aiohttp.ClientTimeout(total=self._timeout))
         return self._session
@@ -65,7 +55,6 @@ class AIService:
             await self._session.close()
 
     async def ask(self, question: str) -> str:
-        """Отправить вопрос нейросети и вернуть текст ответа."""
         if not self._api_key:
             raise AIError("ИИ-помощник пока не настроен: не указан API-ключ.")
 
@@ -85,7 +74,7 @@ class AIService:
 
         last_error = "Нейросеть сейчас недоступна. Попробуй чуть позже."
         for attempt in range(1, self._max_attempts + 1):
-            delay = 1.5 * attempt  # пауза перед следующей попыткой
+            delay = 1.5 * attempt
             try:
                 async with self._get_session().post(self._url, json=payload, headers=headers) as resp:
                     if resp.status == 200:
@@ -124,15 +113,35 @@ class AIService:
 
     @staticmethod
     def _extract_text(data: dict) -> str:
-        """Достать текст ответа из JSON и почистить его."""
         try:
             text = data["choices"][0]["message"]["content"]
         except (KeyError, IndexError, TypeError):
             log.error("Неожиданный формат ответа ИИ: %r", str(data)[:300])
             raise AIError("Нейросеть вернула ответ в неожиданном формате. Попробуй ещё раз.") from None
 
-        # Некоторые модели добавляют «рассуждения» в тегах <think> — убираем их.
         text = re.sub(r"<think>.*?</think>", "", text or "", flags=re.DOTALL).strip()
         if not text:
             raise AIError("Нейросеть вернула пустой ответ. Попробуй переформулировать вопрос.")
         return text
+
+    # ==================== НОВЫЙ МЕТОД ДЛЯ ГЕНЕРАЦИИ ВОПРОСОВ ====================
+    async def generate_question(self) -> dict:
+        """Просит нейросеть сгенерировать новый вопрос для теста в формате JSON."""
+        prompt = (
+            "Придумай один сложный вопрос по информатике для подготовки к ОГЭ. "
+            "Верни ответ СТРОГО в формате JSON без лишнего текста:\n"
+            '{"question": "Текст вопроса", "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"], "correct": 0, "explanation": "Объяснение"}\n'
+            "Где correct — это индекс правильного ответа (от 0 до 3)."
+        )
+        response_text = await self.ask(prompt)
+        
+        # Очищаем ответ от возможных маркеров Markdown, которые может добавить ИИ
+        response_text = response_text.strip().strip("`").strip()
+        if response_text.startswith("json"):
+            response_text = response_text[4:].strip()
+            
+        try:
+            data = json.loads(response_text)
+            return data
+        except json.JSONDecodeError:
+            raise AIError("ИИ не смог сгенерировать вопрос в правильном формате. Попробуй еще раз.")
