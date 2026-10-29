@@ -6,8 +6,8 @@ from keyboards import (
     after_answer_kb, restart_kb, theory_back,
     BTN_THEORY, BTN_TEST, BTN_AI, BTN_STATS, BTN_CANCEL
 )
-from data import THEORY, QUESTIONS 
-from ai_service import AIError # Импортируем ошибку ИИ для обработки
+from data import THEORY, QUESTIONS, Question
+from ai_service import AIError
 
 router = Router()
 
@@ -54,6 +54,7 @@ async def start_test(message: types.Message, db):
     question = QUESTIONS[0]
     await message.answer(
         f"📝 Вопрос: {question.text}",
+        parse_mode="HTML", # <--- Добавлено, чтобы не было тегов <code>
         reply_markup=question_kb(question)
     )
 
@@ -69,8 +70,6 @@ async def check_answer(callback: types.CallbackQuery, db):
         return
 
     is_correct = (answer_index == question.correct)
-    
-    # Используем record_answer, как в твоем database.py
     await db.record_answer(callback.from_user.id, question.id, is_correct)
 
     if is_correct:
@@ -81,6 +80,7 @@ async def check_answer(callback: types.CallbackQuery, db):
 
     await callback.message.edit_text(
         f"{text}\n\n{question.explanation or ''}",
+        parse_mode="HTML", # <--- Добавлено для красивого объяснения
         reply_markup=after_answer_kb()
     )
     await callback.answer()
@@ -98,6 +98,7 @@ async def reset_test(callback: types.CallbackQuery):
     question = QUESTIONS[0]
     await callback.message.edit_text(
         f"📝 Вопрос: {question.text}",
+        parse_mode="HTML", # <--- Добавлено
         reply_markup=question_kb(question)
     )
     await callback.answer()
@@ -135,15 +136,35 @@ async def handle_ai_text(message: types.Message, ai_service, db):
         return
         
     await message.answer("⏳ Думаю над ответом...")
-    
     try:
-        # ИСПРАВЛЕНО: используем метод ask(), как в твоем ai_service.py
         answer = await ai_service.ask(message.text)
         await message.answer(answer)
         await db.increment_ai_requests(message.from_user.id)
     except AIError as e:
-        # Если ИИ вернул понятную ошибку (например, неверный ключ)
         await message.answer(f"⚠️ {e.user_message}")
     except Exception as e:
-        # Если произошла другая ошибка
         await message.answer(f"Произошла непредвиденная ошибка: {e}")
+
+# --- ГЕНЕРАЦИЯ ВОПРОСА ЧЕРЕЗ ИИ (НОВАЯ ФУНКЦИЯ) ---
+@router.message(Command("ai_test"))
+async def generate_ai_question(message: types.Message, ai_service):
+    await message.answer("🧠 Придумываю новый вопрос...")
+    try:
+        q_data = await ai_service.generate_question()
+        
+        new_question = Question(
+            id=999, 
+            topic="ИИ-вопрос",
+            text=q_data["question"],
+            options=tuple(q_data["options"]),
+            correct=q_data["correct"],
+            explanation=q_data["explanation"]
+        )
+        
+        await message.answer(
+            f"📝 Вопрос от ИИ: {new_question.text}",
+            parse_mode="HTML",
+            reply_markup=question_kb(new_question)
+        )
+    except Exception as e:
+        await message.answer(f"Ошибка генерации: {e}")
