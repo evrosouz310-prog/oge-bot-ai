@@ -2,4 +2,4 @@ aiogram
 aiohttp
 python-dotenv
 aiosqlite
-openai9
+openai
