@@ -7,12 +7,12 @@ from keyboards import (
     BTN_THEORY, BTN_TEST, BTN_AI, BTN_STATS, BTN_CANCEL
 )
 from data import THEORY, QUESTIONS 
+from ai_service import AIError # Импортируем ошибку ИИ для обработки
 
 router = Router()
 
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, db):
-    # Сохраняем пользователя в базу (на всякий случай)
     await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     await message.answer(
         f"Привет, {message.from_user.first_name}! 👋\n"
@@ -70,7 +70,7 @@ async def check_answer(callback: types.CallbackQuery, db):
 
     is_correct = (answer_index == question.correct)
     
-    # ИСПРАВЛЕНО: используем record_answer вместо save_answer
+    # Используем record_answer, как в твоем database.py
     await db.record_answer(callback.from_user.id, question.id, is_correct)
 
     if is_correct:
@@ -137,18 +137,13 @@ async def handle_ai_text(message: types.Message, ai_service, db):
     await message.answer("⏳ Думаю над ответом...")
     
     try:
-        # ИСПРАВЛЕНО: мы не знаем точное название метода в ai_service.py, 
-        # поэтому пробуем разные варианты. Скорее всего, это ask() или get_answer()
-        if hasattr(ai_service, 'get_answer'):
-            answer = await ai_service.get_answer(message.text)
-        elif hasattr(ai_service, 'ask'):
-            answer = await ai_service.ask(message.text)
-        else:
-            answer = "Ошибка: метод для общения с ИИ не найден в коде."
-            
+        # ИСПРАВЛЕНО: используем метод ask(), как в твоем ai_service.py
+        answer = await ai_service.ask(message.text)
         await message.answer(answer)
-        # Обновляем счетчик запросов к ИИ
         await db.increment_ai_requests(message.from_user.id)
-        
+    except AIError as e:
+        # Если ИИ вернул понятную ошибку (например, неверный ключ)
+        await message.answer(f"⚠️ {e.user_message}")
     except Exception as e:
-        await message.answer(f"Произошла ошибка при обращении к ИИ: {e}")
+        # Если произошла другая ошибка
+        await message.answer(f"Произошла непредвиденная ошибка: {e}")
