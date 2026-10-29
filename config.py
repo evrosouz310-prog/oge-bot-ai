@@ -99,7 +99,7 @@ def load_settings() -> Settings:
         port=port,
         ai_api_key=_env("AI_API_KEY") or _env("GROQ_API_KEY"),
         ai_base_url=_env("AI_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
-        ai_model=_env("AI_MODEL", "llama-3.3-70b-versatile"),
+        ai_model=_env("AI_MODEL", "llama-3.1-8b-instant"),
         database_url=_env("DATABASE_URL"),
         sqlite_path=_env("SQLITE_PATH", "data/bot.db"),
     )
