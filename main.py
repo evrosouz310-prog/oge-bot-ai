@@ -31,7 +31,7 @@ async def main():
     dp = Dispatcher()
 
     # Инициализируем базу данных и AI сервис
-    db = Database(sqlite_path=settings.sqlite_path, database_url=settings.database_url)
+    db = Database(sqlite_path=settings.sqlite_path, database_url="")
     await db.init()
     
     ai_service = AIService(settings.ai_api_key, settings.ai_base_url, settings.ai_model)
