@@ -6,16 +6,17 @@ from keyboards import (
     after_answer_kb, restart_kb, theory_back,
     BTN_THEORY, BTN_TEST, BTN_AI, BTN_STATS, BTN_CANCEL
 )
-# Импортируем ПРАВИЛЬНЫЕ названия из твоего data.py
 from data import THEORY, QUESTIONS 
 
 router = Router()
 
 @router.message(Command("start"))
-async def cmd_start(message: types.Message):
+async def cmd_start(message: types.Message, db):
+    # Сохраняем пользователя в базу (на всякий случай)
+    await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     await message.answer(
         f"Привет, {message.from_user.first_name}! 👋\n"
-        "Я твой помощник по подготовке к ОГЭ/ЕГЭ по информатике.\n"
+        "Я твой помощник по подготовке к ОГЭ по информатике.\n"
         "Выбери действие на клавиатуре ниже:",
         reply_markup=main_menu()
     )
@@ -40,7 +41,7 @@ async def show_theory_text(callback: types.CallbackQuery):
         topic = THEORY.get(topic_key)
         if topic:
             await callback.message.edit_text(
-                topic.text, # Используем .text, как в твоем data.py
+                topic.text,
                 parse_mode="HTML",
                 reply_markup=theory_back()
             )
@@ -67,8 +68,10 @@ async def check_answer(callback: types.CallbackQuery, db):
         await callback.answer("Вопрос не найден")
         return
 
-    is_correct = (answer_index == question.correct) # Используем .correct
-    await db.save_answer(callback.from_user.id, question.id, is_correct)
+    is_correct = (answer_index == question.correct)
+    
+    # ИСПРАВЛЕНО: используем record_answer вместо save_answer
+    await db.record_answer(callback.from_user.id, question.id, is_correct)
 
     if is_correct:
         text = "✅ Правильно!"
@@ -106,7 +109,7 @@ async def show_stats(message: types.Message, db):
     await message.answer(
         f"📊 <b>Твоя статистика:</b>\n"
         f"Правильных ответов: {stats.get('correct', 0)}\n"
-        f"Всего ответов: {stats.get('total', 0)}",
+        f"Всего ответов: {stats.get('attempts', 0)}",
         parse_mode="HTML"
     )
 
@@ -127,10 +130,25 @@ async def cancel_ai(message: types.Message):
     )
 
 @router.message(F.text & ~F.text.startswith("/"))
-async def handle_ai_text(message: types.Message, ai_service):
+async def handle_ai_text(message: types.Message, ai_service, db):
     if message.text in [BTN_THEORY, BTN_TEST, BTN_AI, BTN_STATS]:
         return
         
     await message.answer("⏳ Думаю над ответом...")
-    answer = await ai_service.get_answer(message.text)
-    await message.answer(answer)
+    
+    try:
+        # ИСПРАВЛЕНО: мы не знаем точное название метода в ai_service.py, 
+        # поэтому пробуем разные варианты. Скорее всего, это ask() или get_answer()
+        if hasattr(ai_service, 'get_answer'):
+            answer = await ai_service.get_answer(message.text)
+        elif hasattr(ai_service, 'ask'):
+            answer = await ai_service.ask(message.text)
+        else:
+            answer = "Ошибка: метод для общения с ИИ не найден в коде."
+            
+        await message.answer(answer)
+        # Обновляем счетчик запросов к ИИ
+        await db.increment_ai_requests(message.from_user.id)
+        
+    except Exception as e:
+        await message.answer(f"Произошла ошибка при обращении к ИИ: {e}")
