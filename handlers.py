@@ -87,9 +87,14 @@ async def check_answer(callback: types.CallbackQuery, db):
 
 @router.callback_query(F.data == "test:next")
 async def next_question(callback: types.CallbackQuery):
+    # Временное решение: берем случайный вопрос из списка
+    import random
+    next_q = random.choice(QUESTIONS) 
+    
     await callback.message.edit_text(
-        "🏆 Тест завершен! Нажми кнопку ниже, чтобы пройти заново.",
-        reply_markup=restart_kb()
+        f"📝 Вопрос: {next_q.text}",
+        parse_mode="HTML",
+        reply_markup=question_kb(next_q)
     )
     await callback.answer()
 
