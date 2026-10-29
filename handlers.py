@@ -6,8 +6,8 @@ from keyboards import (
     after_answer_kb, restart_kb, theory_back,
     BTN_THEORY, BTN_TEST, BTN_AI, BTN_STATS, BTN_CANCEL
 )
-# Импортируем данные. Если в data.py другие названия, мы это исправим.
-from data import THEORY_TOPICS, QUESTIONS 
+# Импортируем ПРАВИЛЬНЫЕ названия из твоего data.py
+from data import THEORY, QUESTIONS 
 
 router = Router()
 
@@ -25,7 +25,7 @@ async def cmd_start(message: types.Message):
 async def show_theory_menu(message: types.Message):
     await message.answer(
         "📚 Выбери тему для изучения:",
-        reply_markup=theory_menu(THEORY_TOPICS)
+        reply_markup=theory_menu(THEORY)
     )
 
 @router.callback_query(F.data.startswith("theory:"))
@@ -34,13 +34,13 @@ async def show_theory_text(callback: types.CallbackQuery):
     if topic_key == "menu":
         await callback.message.edit_text(
             "📚 Выбери тему для изучения:",
-            reply_markup=theory_menu(THEORY_TOPICS)
+            reply_markup=theory_menu(THEORY)
         )
     else:
-        topic = THEORY_TOPICS.get(topic_key)
+        topic = THEORY.get(topic_key)
         if topic:
             await callback.message.edit_text(
-                topic.content,
+                topic.text, # Используем .text, как в твоем data.py
                 parse_mode="HTML",
                 reply_markup=theory_back()
             )
@@ -67,13 +67,13 @@ async def check_answer(callback: types.CallbackQuery, db):
         await callback.answer("Вопрос не найден")
         return
 
-    is_correct = (answer_index == question.correct_index)
+    is_correct = (answer_index == question.correct) # Используем .correct
     await db.save_answer(callback.from_user.id, question.id, is_correct)
 
     if is_correct:
         text = "✅ Правильно!"
     else:
-        correct_letter = "ABCDEF"[question.correct_index]
+        correct_letter = "ABCDEF"[question.correct]
         text = f"❌ Неверно. Правильный ответ: {correct_letter}"
 
     await callback.message.edit_text(
@@ -105,8 +105,8 @@ async def show_stats(message: types.Message, db):
     stats = await db.get_stats(message.from_user.id)
     await message.answer(
         f"📊 <b>Твоя статистика:</b>\n"
-        f"Правильных ответов: {stats['correct']}\n"
-        f"Всего ответов: {stats['total']}",
+        f"Правильных ответов: {stats.get('correct', 0)}\n"
+        f"Всего ответов: {stats.get('total', 0)}",
         parse_mode="HTML"
     )
 
