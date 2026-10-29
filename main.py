@@ -8,7 +8,7 @@ from aiohttp import web
 
 from config import load_settings
 from database import Database
-from handlers import router  # Если этого файла нет, я напишу его ниже
+from handlers import router  
 from ai_service import AIService
 
 # Настройка логирования
