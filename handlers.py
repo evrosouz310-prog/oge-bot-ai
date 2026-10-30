@@ -11,6 +11,19 @@ from ai_service import AIError
 
 router = Router()
 
+@router.message(Command("help"))
+async def cmd_help(message: types.Message):
+    help_text = (
+        "🤖 <b>Список доступных команд:</b>\n\n"
+        "🔹 /start — Перезапустить бота и показать главное меню.\n"
+        "🔹 /help — Показать это сообщение с командами.\n"
+        "🔹 /ai_test — Придумать новый вопрос с помощью нейросети.\n\n"
+        "💡 <b>Как пользоваться:</b>\n"
+        "• Нажимай кнопки на клавиатуре ниже, чтобы перейти в теорию или тест.\n"
+        "• Выбери «Спросить ИИ», чтобы задать любой вопрос по информатике."
+    )
+    await message.answer(help_text, parse_mode="HTML")
+    
 @router.message(Command("start"))
 async def cmd_start(message: types.Message, db):
     await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
