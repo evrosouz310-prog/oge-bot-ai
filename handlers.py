@@ -30,7 +30,9 @@ async def cmd_start(message: types.Message, db):
     await message.answer(
         f"Привет, {message.from_user.first_name}! 👋\n"
         "Я твой помощник по подготовке к ОГЭ/ЕГЭ по информатике.\n"
-        "Выбери действие на клавиатуре ниже:",
+        "Выбери действие на клавиатуре ниже.\n\n"
+        "💡 <i>Подсказка: напиши /help, чтобы увидеть все команды.</i>",
+        parse_mode="HTML",
         reply_markup=main_menu()
     )
 
