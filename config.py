@@ -47,6 +47,7 @@ class Settings:
     ai_api_key: str
     ai_base_url: str
     ai_model: str
+    ai_daily_limit: int  # сколько запросов к нейросети разрешено одному пользователю в день
 
     # --- База данных ---
     database_url: str  # если задан — PostgreSQL, иначе SQLite
@@ -90,6 +91,13 @@ def load_settings() -> Settings:
     except ValueError:
         raise RuntimeError("PORT должен быть числом.") from None
 
+    try:
+        ai_daily_limit = int(_env("AI_DAILY_LIMIT", "20"))
+    except ValueError:
+        raise RuntimeError("AI_DAILY_LIMIT должен быть числом.") from None
+    if ai_daily_limit < 1:
+        raise RuntimeError("AI_DAILY_LIMIT должен быть больше нуля.")
+
     return Settings(
         bot_token=token,
         telegram_api_url=_env("TELEGRAM_API_URL").rstrip("/"),
@@ -100,6 +108,7 @@ def load_settings() -> Settings:
         ai_api_key=_env("AI_API_KEY") or _env("GROQ_API_KEY"),
         ai_base_url=_env("AI_BASE_URL", "https://api.groq.com/openai/v1").rstrip("/"),
         ai_model=_env("AI_MODEL", "llama-3.1-8b-instant"),
+        ai_daily_limit=ai_daily_limit,
         database_url=_env("DATABASE_URL"),
         sqlite_path=_env("SQLITE_PATH", "data/bot.db"),
     )

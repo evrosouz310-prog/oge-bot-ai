@@ -124,24 +124,75 @@ class AIService:
             raise AIError("Нейросеть вернула пустой ответ. Попробуй переформулировать вопрос.")
         return text
 
-    # ==================== НОВЫЙ МЕТОД ДЛЯ ГЕНЕРАЦИИ ВОПРОСОВ ====================
+    # ==================== ГЕНЕРАЦИЯ ВОПРОСОВ ====================
     async def generate_question(self) -> dict:
-        """Просит нейросеть сгенерировать новый вопрос для теста в формате JSON."""
+        """Просит нейросеть сгенерировать новый вопрос и проверяет его формат."""
         prompt = (
-            "Придумай один сложный вопрос по информатике для подготовки к ОГЭ. "
-            "Верни ответ СТРОГО в формате JSON без лишнего текста:\n"
-            '{"question": "Текст вопроса", "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"], "correct": 0, "explanation": "Объяснение"}\n'
-            "Где correct — это индекс правильного ответа (от 0 до 3)."
+            "Придумай один вопрос по информатике для подготовки к ОГЭ. "
+            "Верни ответ СТРОГО в формате JSON без лишнего текста и без Markdown:\n"
+            '{"question": "Текст вопроса", "options": ["Вариант 1", "Вариант 2", "Вариант 3", "Вариант 4"], '
+            '"correct": 0, "explanation": "Объяснение"}\n'
+            "Где correct — индекс правильного ответа (от 0 до 3). "
+            "Вариантов должно быть от 2 до 6, все разные, без нумерации в тексте."
         )
-        response_text = await self.ask(prompt)
-        
-        # Очищаем ответ от возможных маркеров Markdown, которые может добавить ИИ
-        response_text = response_text.strip().strip("`").strip()
-        if response_text.startswith("json"):
-            response_text = response_text[4:].strip()
-            
+
+        last_error: AIError | None = None
+        for _ in range(2):
+            response_text = await self.ask(prompt)
+            try:
+                return self._parse_question(response_text)
+            except AIError as exc:
+                last_error = exc
+                log.warning("Не удалось разобрать вопрос от ИИ: %s", exc)
+
+        raise last_error or AIError(
+            "ИИ не смог сгенерировать вопрос в правильном формате. Попробуй ещё раз."
+        )
+
+    @staticmethod
+    def _parse_question(text: str) -> dict:
+        cleaned = (text or "").strip()
+        if cleaned.startswith("```"):
+            cleaned = re.sub(r"^```[a-zA-Z]*\s*", "", cleaned)
+            cleaned = re.sub(r"\s*```$", "", cleaned).strip()
+
+        start, end = cleaned.find("{"), cleaned.rfind("}")
+        if start == -1 or end <= start:
+            raise AIError("ИИ вернул вопрос не в формате JSON. Попробуй ещё раз.")
+
         try:
-            data = json.loads(response_text)
-            return data
+            data = json.loads(cleaned[start:end + 1])
         except json.JSONDecodeError:
-            raise AIError("ИИ не смог сгенерировать вопрос в правильном формате. Попробуй еще раз.")
+            raise AIError("ИИ вернул вопрос не в формате JSON. Попробуй ещё раз.") from None
+
+        if not isinstance(data, dict):
+            raise AIError("ИИ вернул вопрос не в формате JSON. Попробуй ещё раз.")
+
+        question = str(data.get("question", "")).strip()
+        options = data.get("options")
+        correct = data.get("correct")
+        explanation = str(data.get("explanation", "")).strip()
+
+        if not question:
+            raise AIError("ИИ придумал вопрос без текста. Попробуй ещё раз.")
+        if not isinstance(options, list) or not 2 <= len(options) <= 6:
+            raise AIError("ИИ вернул неверное число вариантов ответа. Попробуй ещё раз.")
+
+        cleaned_options = [str(option).strip() for option in options]
+        if any(not option for option in cleaned_options):
+            raise AIError("ИИ вернул пустой вариант ответа. Попробуй ещё раз.")
+        if len(set(cleaned_options)) != len(cleaned_options):
+            raise AIError("ИИ вернул повторяющиеся варианты ответа. Попробуй ещё раз.")
+        if isinstance(correct, bool) or not isinstance(correct, int):
+            raise AIError("ИИ не указал правильный ответ. Попробуй ещё раз.")
+        if not 0 <= correct < len(cleaned_options):
+            raise AIError("ИИ указал правильный ответ вне диапазона. Попробуй ещё раз.")
+        if not explanation:
+            explanation = f"Правильный ответ: {cleaned_options[correct]}."
+
+        return {
+            "question": question,
+            "options": cleaned_options,
+            "correct": correct,
+            "explanation": explanation,
+        }

@@ -1,5 +1,5 @@
-aiogram
-aiohttp
-python-dotenv
-aiosqlite
-openai
+aiogram>=3.13,<4
+aiohttp>=3.9
+python-dotenv>=1.0
+aiosqlite>=0.20
+asyncpg>=0.29

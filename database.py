@@ -49,6 +49,21 @@ SCHEMA = [
         PRIMARY KEY (user_id, question_id)
     )
     """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_usage (
+        user_id BIGINT  NOT NULL,
+        day     TEXT    NOT NULL,  -- дата в формате ГГГГ-ММ-ДД (UTC)
+        count   INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (user_id, day)
+    )
+    """,
+    """
+    CREATE TABLE IF NOT EXISTS ai_cache (
+        prompt_hash TEXT PRIMARY KEY,
+        answer      TEXT NOT NULL,
+        created_at  TEXT NOT NULL
+    )
+    """,
 ]
 
 
@@ -153,6 +168,59 @@ class Database:
             "UPDATE users SET ai_requests = ai_requests + 1 WHERE user_id = ?", (user_id,)
         )
 
+    # ------------------------------------------------------------------ лимиты и кэш ИИ
+
+    async def get_ai_used(self, user_id: int, day: str) -> int:
+        """Сколько запросов к нейросети пользователь сделал за указанный день."""
+        rows = await self._fetchall(
+            "SELECT count FROM ai_usage WHERE user_id = ? AND day = ?", (user_id, day)
+        )
+        return int(rows[0][0]) if rows else 0
+
+    async def increment_ai_used(self, user_id: int, day: str) -> None:
+        """Увеличить дневной счётчик запросов к нейросети."""
+        await self._execute(
+            """
+            INSERT INTO ai_usage (user_id, day, count)
+            VALUES (?, ?, 1)
+            ON CONFLICT (user_id, day) DO UPDATE SET count = ai_usage.count + 1
+            """,
+            (user_id, day),
+        )
+
+    async def get_cached_answer(self, prompt_hash: str, max_age_hours: int = 168) -> str | None:
+        """Вернуть сохранённый ответ нейросети, если он не старше max_age_hours."""
+        rows = await self._fetchall(
+            "SELECT answer, created_at FROM ai_cache WHERE prompt_hash = ?", (prompt_hash,)
+        )
+        if not rows:
+            return None
+        answer, created_at = rows[0]
+        try:
+            created = datetime.fromisoformat(str(created_at))
+        except ValueError:
+            return None
+        if created.tzinfo is None:
+            created = created.replace(tzinfo=timezone.utc)
+        age_hours = (datetime.now(timezone.utc) - created).total_seconds() / 3600
+        if age_hours > max_age_hours:
+            await self._execute("DELETE FROM ai_cache WHERE prompt_hash = ?", (prompt_hash,))
+            return None
+        return str(answer)
+
+    async def save_cached_answer(self, prompt_hash: str, answer: str) -> None:
+        """Сохранить ответ нейросети в кэш."""
+        await self._execute(
+            """
+            INSERT INTO ai_cache (prompt_hash, answer, created_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT (prompt_hash) DO UPDATE SET
+                answer     = excluded.answer,
+                created_at = excluded.created_at
+            """,
+            (prompt_hash, answer, _now()),
+        )
+
     # ------------------------------------------------------------------ прогресс
 
     async def record_answer(self, user_id: int, question_id: int, is_correct: bool) -> None:
@@ -177,6 +245,35 @@ class Database:
             "SELECT question_id FROM progress WHERE user_id = ? AND last_correct = 1", (user_id,)
         )
         return {int(r[0]) for r in rows}
+
+    async def get_wrong_ids(self, user_id: int) -> set[int]:
+        """Номера вопросов, на которые пользователь последний раз ответил неверно."""
+        rows = await self._fetchall(
+            """
+            SELECT question_id FROM progress
+            WHERE user_id = ? AND last_correct = 0 AND attempts > 0
+            """,
+            (user_id,),
+        )
+        return {int(r[0]) for r in rows}
+
+    async def get_progress(self, user_id: int) -> dict[int, dict[str, int]]:
+        """Детальный прогресс по каждому вопросу."""
+        rows = await self._fetchall(
+            """
+            SELECT question_id, attempts, correct_count, last_correct
+            FROM progress WHERE user_id = ?
+            """,
+            (user_id,),
+        )
+        return {
+            int(r[0]): {
+                "attempts": int(r[1]),
+                "correct": int(r[2]),
+                "last_correct": int(r[3]),
+            }
+            for r in rows
+        }
 
     async def get_stats(self, user_id: int) -> dict[str, int]:
         """Сводная статистика пользователя."""
