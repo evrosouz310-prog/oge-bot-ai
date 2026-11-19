@@ -1,6 +1,3 @@
-"""
-ai_service.py — обращение к нейросети.
-"""
 from __future__ import annotations
 
 import asyncio
