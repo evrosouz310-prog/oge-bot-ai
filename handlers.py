@@ -56,7 +56,7 @@ def _find_question(user_id: int, question_id: int) -> Question | None:
 async def _collect_ids(db, user_id: int, mode: str, key: str) -> tuple[list[int], str]:
     if mode == "mistakes":
         wrong = await db.get_wrong_ids(user_id)
-        return [q.id for q in QUESTIONS if q.id in wrong], "Р Р°Р±РѕС‚Р° РЅР°Рґ РѕС€РёР±РєР°РјРё"
+        return [q.id for q in QUESTIONS if q.id in wrong], "Работа над ошибками"
     if mode == "topic":
         try:
             index = int(key)
@@ -68,7 +68,7 @@ async def _collect_ids(db, user_id: int, mode: str, key: str) -> tuple[list[int]
         return [q.id for q in QUESTIONS if q.topic == topic], topic
     solved = await db.get_solved_ids(user_id)
     remaining = [q.id for q in QUESTIONS if q.id not in solved]
-    return (remaining or [q.id for q in QUESTIONS]), "Р’СЃРµ С‚РµРјС‹"
+    return (remaining or [q.id for q in QUESTIONS]), "Все темы"
 
 
 def _session_question(user_id: int) -> Question | None:
@@ -90,7 +90,7 @@ async def _show_current(callback: types.CallbackQuery, db) -> None:
         await _finish(callback, db)
         return
     await callback.message.edit_text(
-        f"рџ“ќ Р’РѕРїСЂРѕСЃ: {question.text}",
+        f"📝 Вопрос: {question.text}",
         parse_mode="HTML",
         reply_markup=question_kb(question),
     )
@@ -102,9 +102,9 @@ async def _launch(callback: types.CallbackQuery, db, mode: str, key: str) -> Non
     if not ids:
         _sessions.pop(user_id, None)
         text = (
-            "рџЋ‰ РћС€РёР±РѕРє РЅРµС‚ вЂ” РІСЃРµ РІРѕРїСЂРѕСЃС‹ СЂРµС€РµРЅС‹ РІРµСЂРЅРѕ!"
+            "🎉 Ошибок нет — все вопросы решены верно!"
             if mode == "mistakes"
-            else "Р’ СЌС‚РѕР№ С‚РµРјРµ РїРѕРєР° РЅРµС‚ РІРѕРїСЂРѕСЃРѕРІ."
+            else "В этой теме пока нет вопросов."
         )
         await callback.message.edit_text(text, reply_markup=topics_menu(TOPICS))
         await callback.answer()
@@ -117,14 +117,14 @@ async def _launch(callback: types.CallbackQuery, db, mode: str, key: str) -> Non
 async def _finish(callback: types.CallbackQuery, db) -> None:
     user_id = callback.from_user.id
     session = _sessions.get(user_id)
-    title = session["title"] if session else "Р’СЃРµ С‚РµРјС‹"
+    title = session["title"] if session else "Все темы"
     if session:
         session["pos"] = len(session["ids"])
     stats = await db.get_stats(user_id)
     await callback.message.edit_text(
-        f"рџЏЃ РўСЂРµРЅРёСЂРѕРІРєР° Р·Р°РІРµСЂС€РµРЅР° вЂ” В«{title}В».\n\n"
-        f"Р РµС€РµРЅРѕ СѓРЅРёРєР°Р»СЊРЅС‹С… РІРѕРїСЂРѕСЃРѕРІ: {stats['solved']} РёР· {len(QUESTIONS)}\n"
-        f"РџСЂР°РІРёР»СЊРЅС‹С… РѕС‚РІРµС‚РѕРІ: {stats['correct']} РёР· {stats['attempts']}",
+        f"🏁 Тренировка завершена — «{title}».\n\n"
+        f"Решено уникальных вопросов: {stats['solved']} из {len(QUESTIONS)}\n"
+        f"Правильных ответов: {stats['correct']} из {stats['attempts']}",
         parse_mode="HTML",
         reply_markup=restart_kb(),
     )
@@ -144,20 +144,20 @@ async def _stats_text(db, user_id: int) -> str:
         bucket["correct"] += item["correct"]
 
     lines = [
-        "рџ“Љ <b>РўРІРѕСЏ СЃС‚Р°С‚РёСЃС‚РёРєР°:</b>",
-        f"Р РµС€РµРЅРѕ СѓРЅРёРєР°Р»СЊРЅС‹С… РІРѕРїСЂРѕСЃРѕРІ: {stats['solved']} РёР· {len(QUESTIONS)}",
-        f"РџСЂР°РІРёР»СЊРЅС‹С… РѕС‚РІРµС‚РѕРІ: {stats['correct']} РёР· {stats['attempts']}",
+        "📊 <b>Твоя статистика:</b>",
+        f"Решено уникальных вопросов: {stats['solved']} из {len(QUESTIONS)}",
+        f"Правильных ответов: {stats['correct']} из {stats['attempts']}",
     ]
     if stats["attempts"]:
         percent = round(100 * stats["correct"] / stats["attempts"])
-        lines.append(f"РўРѕС‡РЅРѕСЃС‚СЊ: {percent}%")
-    lines.append(f"Р’РѕРїСЂРѕСЃРѕРІ Рє РЅРµР№СЂРѕСЃРµС‚Рё: {stats['ai_requests']}")
+        lines.append(f"Точность: {percent}%")
+    lines.append(f"Вопросов к нейросети: {stats['ai_requests']}")
 
     if by_topic:
         lines.append("")
-        lines.append("<b>РџРѕ С‚РµРјР°Рј:</b>")
+        lines.append("<b>По темам:</b>")
         for topic, item in by_topic.items():
-            lines.append(f"вЂў {topic}: {item['correct']} РёР· {item['attempts']}")
+            lines.append(f"• {topic}: {item['correct']} из {item['attempts']}")
 
     return "\n".join(lines)
 
@@ -165,15 +165,15 @@ async def _stats_text(db, user_id: int) -> str:
 @router.message(Command("help"))
 async def cmd_help(message: types.Message):
     help_text = (
-        "рџ¤– <b>РЎРїРёСЃРѕРє РґРѕСЃС‚СѓРїРЅС‹С… РєРѕРјР°РЅРґ:</b>\n\n"
-        "рџ”№ /start вЂ” РџРµСЂРµР·Р°РїСѓСЃС‚РёС‚СЊ Р±РѕС‚Р° Рё РїРѕРєР°Р·Р°С‚СЊ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ.\n"
-        "рџ”№ /help вЂ” РџРѕРєР°Р·Р°С‚СЊ СЌС‚Рѕ СЃРѕРѕР±С‰РµРЅРёРµ СЃ РєРѕРјР°РЅРґР°РјРё.\n"
-        "рџ”№ /ai_test вЂ” РџСЂРёРґСѓРјР°С‚СЊ РЅРѕРІС‹Р№ РІРѕРїСЂРѕСЃ СЃ РїРѕРјРѕС‰СЊСЋ РЅРµР№СЂРѕСЃРµС‚Рё.\n\n"
-        "рџ’Ў <b>РљР°Рє РїРѕР»СЊР·РѕРІР°С‚СЊСЃСЏ:</b>\n"
-        "вЂў РќР°Р¶РёРјР°Р№ РєРЅРѕРїРєРё РЅР° РєР»Р°РІРёР°С‚СѓСЂРµ РЅРёР¶Рµ, С‡С‚РѕР±С‹ РїРµСЂРµР№С‚Рё РІ С‚РµРѕСЂРёСЋ РёР»Рё С‚РµСЃС‚.\n"
-        "вЂў Р’ С‚РµСЃС‚Рµ РјРѕР¶РЅРѕ РІС‹Р±СЂР°С‚СЊ С‚РµРјСѓ РёР»Рё РїСЂРѕР№С‚Рё В«Р Р°Р±РѕС‚Сѓ РЅР°Рґ РѕС€РёР±РєР°РјРёВ».\n"
-        "вЂў Р’С‹Р±РµСЂРё В«РЎРїСЂРѕСЃРёС‚СЊ РРВ», С‡С‚РѕР±С‹ Р·Р°РґР°С‚СЊ Р»СЋР±РѕР№ РІРѕРїСЂРѕСЃ РїРѕ РёРЅС„РѕСЂРјР°С‚РёРєРµ.\n\n"
-        "вљ пёЏ РЈ РІРѕРїСЂРѕСЃРѕРІ Рє РЅРµР№СЂРѕСЃРµС‚Рё РµСЃС‚СЊ РґРЅРµРІРЅРѕР№ Р»РёРјРёС‚."
+        "🤖 <b>Список доступных команд:</b>\n\n"
+        "🔹 /start — Перезапустить бота и показать главное меню.\n"
+        "🔹 /help — Показать это сообщение с командами.\n"
+        "🔹 /ai_test — Придумать новый вопрос с помощью нейросети.\n\n"
+        "💡 <b>Как пользоваться:</b>\n"
+        "• Нажимай кнопки на клавиатуре ниже, чтобы перейти в теорию или тест.\n"
+        "• В тесте можно выбрать тему или пройти «Работу над ошибками».\n"
+        "• Выбери «Спросить ИИ», чтобы задать любой вопрос по информатике.\n\n"
+        "⚠️ У вопросов к нейросети есть дневной лимит."
     )
     await message.answer(help_text, parse_mode="HTML")
 
@@ -182,20 +182,19 @@ async def cmd_help(message: types.Message):
 async def cmd_start(message: types.Message, db):
     await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
     await message.answer(
-        f"РџСЂРёРІРµС‚, {message.from_user.first_name}! рџ‘‹\n"
-        "РЇ С‚РІРѕР№ РїРѕРјРѕС‰РЅРёРє РїРѕ РїРѕРґРіРѕС‚РѕРІРєРµ Рє РћР“Р­/Р•Р“Р­ РїРѕ РёРЅС„РѕСЂРјР°С‚РёРєРµ.\n"
-        "Р’С‹Р±РµСЂРё РґРµР№СЃС‚РІРёРµ РЅР° РєР»Р°РІРёР°С‚СѓСЂРµ РЅРёР¶Рµ.\n\n"
-        "рџ’Ў <i>РџРѕРґСЃРєР°Р·РєР°: РЅР°РїРёС€Рё /help, С‡С‚РѕР±С‹ СѓРІРёРґРµС‚СЊ РІСЃРµ РєРѕРјР°РЅРґС‹.</i>",
+        f"Привет, {message.from_user.first_name}! 👋\n"
+        "Я твой помощник по подготовке к ОГЭ/ЕГЭ по информатике.\n"
+        "Выбери действие на клавиатуре ниже.\n\n"
+        "💡 <i>Подсказка: напиши /help, чтобы увидеть все команды.</i>",
         parse_mode="HTML",
         reply_markup=main_menu()
     )
 
 
-# --- РўР•РћР РРЇ ---
 @router.message(F.text == BTN_THEORY)
 async def show_theory_menu(message: types.Message):
     await message.answer(
-        "рџ“љ Р’С‹Р±РµСЂРё С‚РµРјСѓ РґР»СЏ РёР·СѓС‡РµРЅРёСЏ:",
+        "📚 Выбери тему для изучения:",
         reply_markup=theory_menu(THEORY)
     )
 
@@ -205,7 +204,7 @@ async def show_theory_text(callback: types.CallbackQuery):
     topic_key = callback.data.split(":")[1]
     if topic_key == "menu":
         await callback.message.edit_text(
-            "рџ“љ Р’С‹Р±РµСЂРё С‚РµРјСѓ РґР»СЏ РёР·СѓС‡РµРЅРёСЏ:",
+            "📚 Выбери тему для изучения:",
             reply_markup=theory_menu(THEORY)
         )
     else:
@@ -219,11 +218,10 @@ async def show_theory_text(callback: types.CallbackQuery):
     await callback.answer()
 
 
-# --- РўР•РЎРў ---
 @router.message(F.text == BTN_TEST)
 async def start_test(message: types.Message):
     await message.answer(
-        "рџ“ќ Р’С‹Р±РµСЂРё С‚РµРјСѓ РґР»СЏ С‚СЂРµРЅРёСЂРѕРІРєРё:",
+        "📝 Выбери тему для тренировки:",
         reply_markup=topics_menu(TOPICS)
     )
 
@@ -231,7 +229,7 @@ async def start_test(message: types.Message):
 @router.callback_query(F.data == "test:menu")
 async def show_test_topics(callback: types.CallbackQuery):
     await callback.message.edit_text(
-        "рџ“ќ Р’С‹Р±РµСЂРё С‚РµРјСѓ РґР»СЏ С‚СЂРµРЅРёСЂРѕРІРєРё:",
+        "📝 Выбери тему для тренировки:",
         reply_markup=topics_menu(TOPICS)
     )
     await callback.answer()
@@ -259,12 +257,12 @@ async def check_answer(callback: types.CallbackQuery, db):
         question_id = int(raw_id)
         answer_index = int(raw_index)
     except ValueError:
-        await callback.answer("РќРµРєРѕСЂСЂРµРєС‚РЅР°СЏ РєРЅРѕРїРєР°", show_alert=True)
+        await callback.answer("Некорректная кнопка", show_alert=True)
         return
 
     question = _find_question(callback.from_user.id, question_id)
     if question is None:
-        await callback.answer("Р’РѕРїСЂРѕСЃ СѓСЃС‚Р°СЂРµР» вЂ” РЅР°С‡РЅРё С‚СЂРµРЅРёСЂРѕРІРєСѓ Р·Р°РЅРѕРІРѕ", show_alert=True)
+        await callback.answer("Вопрос устарел — начни тренировку заново", show_alert=True)
         return
     if not 0 <= answer_index < len(question.options):
         await callback.answer()
@@ -275,10 +273,10 @@ async def check_answer(callback: types.CallbackQuery, db):
         await db.record_answer(callback.from_user.id, question.id, is_correct)
 
     if is_correct:
-        text = "вњ… РџСЂР°РІРёР»СЊРЅРѕ!"
+        text = "✅ Правильно!"
     else:
         correct_letter = "ABCDEF"[question.correct]
-        text = f"вќЊ РќРµРІРµСЂРЅРѕ. РџСЂР°РІРёР»СЊРЅС‹Р№ РѕС‚РІРµС‚: {correct_letter}"
+        text = f"❌ Неверно. Правильный ответ: {correct_letter}"
 
     await callback.message.edit_text(
         f"{text}\n\n{question.explanation or ''}",
@@ -308,7 +306,7 @@ async def reset_test(callback: types.CallbackQuery, db):
     session = _sessions.get(user_id)
     if not session:
         await callback.message.edit_text(
-            "рџ“ќ Р’С‹Р±РµСЂРё С‚РµРјСѓ РґР»СЏ С‚СЂРµРЅРёСЂРѕРІРєРё:",
+            "📝 Выбери тему для тренировки:",
             reply_markup=topics_menu(TOPICS),
         )
         await callback.answer()
@@ -316,7 +314,6 @@ async def reset_test(callback: types.CallbackQuery, db):
     await _launch(callback, db, session["mode"], session["key"])
 
 
-# --- РЎРўРђРўРРЎРўРРљРђ ---
 @router.message(F.text == BTN_STATS)
 async def show_stats(message: types.Message, db):
     await db.upsert_user(message.from_user.id, message.from_user.username, message.from_user.first_name)
@@ -333,12 +330,11 @@ async def show_stats_callback(callback: types.CallbackQuery, db):
     await callback.answer()
 
 
-# --- РР ---
 @router.message(F.text == BTN_AI)
 async def start_ai(message: types.Message):
     await message.answer(
-        "рџ¤– РЇ РіРѕС‚РѕРІ РѕС‚РІРµС‡Р°С‚СЊ РЅР° С‚РІРѕРё РІРѕРїСЂРѕСЃС‹ РїРѕ РёРЅС„РѕСЂРјР°С‚РёРєРµ!\n"
-        "РќР°РїРёС€Рё СЃРІРѕР№ РІРѕРїСЂРѕСЃ:",
+        "🤖 Я готов отвечать на твои вопросы по информатике!\n"
+        "Напиши свой вопрос:",
         reply_markup=ai_menu()
     )
 
@@ -346,7 +342,7 @@ async def start_ai(message: types.Message):
 @router.message(F.text == BTN_CANCEL)
 async def cancel_ai(message: types.Message):
     await message.answer(
-        "Р’РѕР·РІСЂР°С‰Р°РµРјСЃСЏ РІ РіР»Р°РІРЅРѕРµ РјРµРЅСЋ.",
+        "Возвращаемся в главное меню.",
         reply_markup=main_menu()
     )
 
@@ -358,10 +354,10 @@ async def handle_ai_text(message: types.Message, ai_service, db, settings: Setti
 
     text = message.text.strip()
     if len(text) < 3:
-        await message.answer("РќР°РїРёС€Рё РІРѕРїСЂРѕСЃ С‡СѓС‚СЊ РїРѕРґСЂРѕР±РЅРµРµ.")
+        await message.answer("Напиши вопрос чуть подробнее.")
         return
     if len(text) > 500:
-        await message.answer("Р’РѕРїСЂРѕСЃ СЃР»РёС€РєРѕРј РґР»РёРЅРЅС‹Р№ вЂ” СЃРѕРєСЂР°С‚Рё РµРіРѕ РґРѕ 500 СЃРёРјРІРѕР»РѕРІ.")
+        await message.answer("Вопрос слишком длинный — сократи его до 500 символов.")
         return
 
     user_id = message.from_user.id
@@ -377,20 +373,20 @@ async def handle_ai_text(message: types.Message, ai_service, db, settings: Setti
 
     if used >= settings.ai_daily_limit:
         await message.answer(
-            f"вљ пёЏ РќР° СЃРµРіРѕРґРЅСЏ Р»РёРјРёС‚ РІРѕРїСЂРѕСЃРѕРІ Рє РЅРµР№СЂРѕСЃРµС‚Рё РёСЃС‡РµСЂРїР°РЅ ({settings.ai_daily_limit}).\n"
-            "Р’РѕР·РІСЂР°С‰Р°Р№СЃСЏ Р·Р°РІС‚СЂР° вЂ” С‚РµРѕСЂРёСЏ Рё С‚РµСЃС‚С‹ СЂР°Р±РѕС‚Р°СЋС‚ Р±РµР· РѕРіСЂР°РЅРёС‡РµРЅРёР№."
+            f"⚠️ На сегодня лимит вопросов к нейросети исчерпан ({settings.ai_daily_limit}).\n"
+            "Возвращайся завтра — теория и тесты работают без ограничений."
         )
         return
 
-    await message.answer("вЏі Р”СѓРјР°СЋ РЅР°Рґ РѕС‚РІРµС‚РѕРј...")
+    await message.answer("⏳ Думаю над ответом...")
     try:
         answer = await ai_service.ask(text)
     except AIError as exc:
-        await message.answer(f"вљ пёЏ {exc.user_message}")
+        await message.answer(f"⚠️ {exc.user_message}")
         return
     except Exception:
-        log.exception("РќРµРѕР¶РёРґР°РЅРЅР°СЏ РѕС€РёР±РєР° РїСЂРё Р·Р°РїСЂРѕСЃРµ Рє РЅРµР№СЂРѕСЃРµС‚Рё")
-        await message.answer("вљ пёЏ Р§С‚Рѕ-С‚Рѕ РїРѕС€Р»Рѕ РЅРµ С‚Р°Рє. РџРѕРїСЂРѕР±СѓР№ РµС‰С‘ СЂР°Р· С‡СѓС‚СЊ РїРѕР·Р¶Рµ.")
+        log.exception("Неожиданная ошибка при запросе к нейросети")
+        await message.answer("⚠️ Что-то пошло не так. Попробуй ещё раз чуть позже.")
         return
 
     await message.answer(answer)
@@ -406,24 +402,24 @@ async def generate_ai_question(message: types.Message, ai_service, db, settings:
     used = await db.get_ai_used(user_id, day)
     if used >= settings.ai_daily_limit:
         await message.answer(
-            f"вљ пёЏ РќР° СЃРµРіРѕРґРЅСЏ Р»РёРјРёС‚ РІРѕРїСЂРѕСЃРѕРІ Рє РЅРµР№СЂРѕСЃРµС‚Рё РёСЃС‡РµСЂРїР°РЅ ({settings.ai_daily_limit})."
+            f"⚠️ На сегодня лимит вопросов к нейросети исчерпан ({settings.ai_daily_limit})."
         )
         return
 
-    await message.answer("рџ§  РџСЂРёРґСѓРјС‹РІР°СЋ РЅРѕРІС‹Р№ РІРѕРїСЂРѕСЃ...")
+    await message.answer("🧠 Придумываю новый вопрос...")
     try:
         data = await ai_service.generate_question()
     except AIError as exc:
-        await message.answer(f"вљ пёЏ {exc.user_message}")
+        await message.answer(f"⚠️ {exc.user_message}")
         return
     except Exception:
-        log.exception("РќРµРѕР¶РёРґР°РЅРЅР°СЏ РѕС€РёР±РєР° РїСЂРё РіРµРЅРµСЂР°С†РёРё РІРѕРїСЂРѕСЃР°")
-        await message.answer("вљ пёЏ РќРµ РїРѕР»СѓС‡РёР»РѕСЃСЊ РїСЂРёРґСѓРјР°С‚СЊ РІРѕРїСЂРѕСЃ. РџРѕРїСЂРѕР±СѓР№ РµС‰С‘ СЂР°Р· С‡СѓС‚СЊ РїРѕР·Р¶Рµ.")
+        log.exception("Неожиданная ошибка при генерации вопроса")
+        await message.answer("⚠️ Не получилось придумать вопрос. Попробуй ещё раз чуть позже.")
         return
 
     question = Question(
         id=next(_ai_ids),
-        topic="РР-РІРѕРїСЂРѕСЃ",
+        topic="ИИ-вопрос",
         text=html.escape(data["question"]),
         options=tuple(data["options"]),
         correct=data["correct"],
@@ -433,7 +429,7 @@ async def generate_ai_question(message: types.Message, ai_service, db, settings:
 
     await db.increment_ai_used(user_id, day)
     await message.answer(
-        f"рџ“ќ Р’РѕРїСЂРѕСЃ РѕС‚ РР: {question.text}",
+        f"📝 Вопрос от ИИ: {question.text}",
         parse_mode="HTML",
         reply_markup=question_kb(question),
     )
