@@ -1,12 +1,3 @@
-"""
-data.py — учебный контент: шпаргалки по теории и банк тестовых вопросов.
-
-Тексты написаны в HTML-разметке Telegram (<b>, <i>, <code>, <pre>).
-Символы «<», «>» и «&» внутри текста записываются как &lt; &gt; &amp;.
-
-Чтобы добавить вопрос — допишите объект Question в конец списка QUESTIONS
-(главное — уникальный id и правильный индекс correct, считая с нуля).
-"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -14,22 +5,20 @@ from dataclasses import dataclass
 
 @dataclass(frozen=True)
 class TheoryTopic:
-    key: str    # короткий ключ для callback-кнопки
-    title: str  # название на кнопке
-    text: str   # текст шпаргалки (HTML)
+    key: str
+    title: str
+    text: str
 
 
 @dataclass(frozen=True)
 class Question:
     id: int
     topic: str
-    text: str                  # текст вопроса (HTML)
-    options: tuple[str, ...]   # варианты ответа (обычный текст)
-    correct: int               # индекс верного варианта (с нуля)
-    explanation: str           # разбор решения (HTML)
+    text: str
+    options: tuple[str, ...]
+    correct: int
+    explanation: str
 
-
-# --------------------------------------------------------------------------- ТЕОРИЯ
 
 _THEORY_LIST = [
     TheoryTopic(
@@ -192,8 +181,6 @@ else:
 THEORY: dict[str, TheoryTopic] = {t.key: t for t in _THEORY_LIST}
 
 
-# --------------------------------------------------------------------------- ВОПРОСЫ
-
 QUESTIONS: list[Question] = [
     Question(
         1, "Системы счисления",
@@ -270,75 +257,4 @@ QUESTIONS: list[Question] = [
     ),
     Question(
         13, "Файлы и адреса",
-        "Какое имя файла соответствует маске <code>?a*.txt</code>?",
-        ("ab.txt", "a.txt", "data.txt", "mama.doc"), 2,
-        "«?» — ровно один символ, затем буква a, потом что угодно и «.txt». "
-        "Подходит data.txt (d + a + «ta» + .txt).",
-    ),
-    Question(
-        14, "Файлы и адреса",
-        "В адресе <code>https://school.ru/docs/index.html</code> укажите протокол.",
-        ("school.ru", "docs", "index.html", "https"), 3,
-        "Протокол записывается перед «://» — это https.",
-    ),
-    Question(
-        15, "Электронные таблицы",
-        "В ячейке A1 записано число 5, в B1 — число 3. В C1 записана формула "
-        "<code>=A1*B1+2</code>. Какое значение будет в C1?",
-        ("10", "15", "17", "53"), 2,
-        "Сначала умножение: 5·3 = 15, затем 15 + 2 = 17.",
-    ),
-    Question(
-        16, "Электронные таблицы",
-        "В ячейке C1 записана формула <code>=A1+B1</code>. Её скопировали в ячейку C2. "
-        "Какая формула окажется в C2?",
-        ("=A1+B1", "=A2+B2", "=A2+B1", "=$A$1+$B$1"), 1,
-        "Ссылки относительные: при копировании на строку вниз номера строк увеличиваются на 1.",
-    ),
-    Question(
-        17, "Python и алгоритмы",
-        "Что выведет программа?\n<pre>x = 7\nprint(x % 3)</pre>",
-        ("0", "1", "2", "3"), 1,
-        "7 = 3·2 + 1, остаток от деления равен 1.",
-    ),
-    Question(
-        18, "Python и алгоритмы",
-        "Что выведет программа?\n<pre>print(17 // 5)</pre>",
-        ("2", "3", "3.4", "4"), 1,
-        "Операция // — целочисленное деление: 17 // 5 = 3.",
-    ),
-    Question(
-        19, "Python и алгоритмы",
-        "Что выведет программа?\n<pre>s = 0\nfor i in range(1, 5):\n    s += i\nprint(s)</pre>",
-        ("6", "10", "15", "5"), 1,
-        "range(1, 5) даёт 1, 2, 3, 4 (число 5 не входит). Сумма: 1+2+3+4 = 10.",
-    ),
-    Question(
-        20, "Python и алгоритмы",
-        "Что выведет программа?\n<pre>print(\"2\" + \"3\")</pre>",
-        ("5", "23", "2 3", "будет ошибка"), 1,
-        "Это строки, а не числа. Операция «+» склеивает их: получится 23.",
-    ),
-    Question(
-        21, "Python и алгоритмы",
-        "Чему равно значение выражения <code>len(\"информатика\")</code>?",
-        ("9", "10", "11", "12"), 2,
-        "В слове «информатика» 11 букв: и-н-ф-о-р-м-а-т-и-к-а.",
-    ),
-]
-
-QUESTIONS_BY_ID: dict[int, Question] = {q.id: q for q in QUESTIONS}
-
-
-def _validate() -> None:
-    """Проверка банка вопросов при запуске: ошибка в данных не должна всплыть у пользователя."""
-    if len(QUESTIONS_BY_ID) != len(QUESTIONS):
-        raise ValueError("В data.py есть повторяющиеся id вопросов.")
-    for q in QUESTIONS:
-        if not 2 <= len(q.options) <= 6:
-            raise ValueError(f"Вопрос {q.id}: должно быть от 2 до 6 вариантов ответа.")
-        if not 0 <= q.correct < len(q.options):
-            raise ValueError(f"Вопрос {q.id}: индекс правильного ответа вне диапазона.")
-
-
-_validate()
+        "Какое имя файла соответствует
