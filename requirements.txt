@@ -3,3 +3,4 @@ aiohttp>=3.9
 python-dotenv>=1.0
 aiosqlite>=0.20
 asyncpg>=0.29
+pytest>=8.0
